@@ -12,15 +12,15 @@ def readme():
     with open('README.md') as f:
         return f.read()
 
-setup(name='GWUniverse',
+setup(name='GWSim',
       version='0.1.0',
       description='A package to create datasets of mock data challenges for gravitational-wave codes',
-      url='https://git.ligo.org/christos.karathanasis/gwuniverse',
+      url='https://git.ligo.org/benoit.revenu/gwsim',
       author='Christos Karathanasis',
       author_email='ckarathanasis@ifae.es',
       license='GNU',
-      packages=['GWUniverse', 'GWUniverse.universe', 'GWUniverse.catalog', 'GWUniverse.injections', 'GWUniverse.random'],
-      package_dir={'GWUniverse': 'GWUniverse'},
+      packages=['GWSim', 'GWSim.universe', 'GWSim.catalog', 'GWSim.injections', 'GWSim.random'],
+      package_dir={'GWSim': 'GWSim'},
       scripts=['bin/GW_create_universe', 'bin/GW_create_catalog', 'bin/GW_injections','bin/GW_create_posteriors'],
       include_package_data=True,
       install_requires=[

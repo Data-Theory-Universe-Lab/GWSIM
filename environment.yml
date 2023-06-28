@@ -1,4 +1,4 @@
-name: /Users/revenu/GW/gwuniverse/env
+name: /Users/revenu/GW/gwsim.public/env
 channels:
   - defaults
 dependencies:
