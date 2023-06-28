@@ -1,0 +1,488 @@
+#!/usr/bin/env python3
+
+import os
+import numpy as np
+from optparse import Option, OptionParser, OptionGroup
+import pickle
+from GWUniverse.injections.masses import Masses
+from GWUniverse.injections.spins import Spins
+from GWUniverse.injections.make_injections import Select_events,Select_galaxies
+from GWUniverse.cosmology import Cosmology
+import warnings
+import time
+
+parser = OptionParser(
+    description = __doc__,
+    usage = "%prog [options]",
+    option_list = [
+        Option("--file", default=None,
+            help="Path of the universe or catalog file to use for the injections.(required)"),
+        Option("--luminosity_weight",default=0,type=int,
+            help="Default is 0 (false). Set to 1 (true) will make the more luminous galaxies more probable to host a GW event."),
+        Option("--redshift_weight",default=0,type=int,
+            help="Default is 0 (false). Set to 1 (true) will take into account the redshift model for the merger rate."),
+        Option("--red_model",default='Madau',type=str,
+            help="Select the redshift evolution model for the merger rate."),
+        Option("--seed", default=1000, type=int,
+            help="Random seed"),
+
+
+        Option("--use_cosmo", default=0, type = int,
+            help="Default is 0 (false): pre-sets Cosmology. If set to 1 (true), user input Cosmology"),
+        Option("--cosmo_model", default='flatLCDM', type=str,
+            help="Cosmological model for Cosmology"),
+        Option("--H0", default=70, type=float,
+            help="Hubble constant value for Cosmology"),
+        Option("--w0", default=-1, type=float,
+            help="Dimensionless EoS parameter for Cosmology"),
+        Option("--Omega_m", default=0.3, type=float,
+            help="Baryonic mass density parameter for Cosmology"),
+
+        Option("--catalog_name", default=None, type=str,
+            help="Minimum Redshift for Galaxy_cat parameters"),
+        Option("--zmin", default=0.07296, type=float,
+            help="Minimum Redshift for Galaxy_cat parameters"),
+        Option("--z_err_perc", default=5.0, type=float,
+            help="Redshift uncertainty percentage for Galaxy_cat parameters"),
+        Option("--magnitude_band", default='g', type=str,
+            help="Magnitude Band for Galaxy_cat parameters"),
+        Option("--magnitude_type", default='absolute', type=str,
+            help="Magnitude type for Galaxy_cat parameters (apparent or absolute)"),
+        Option("--NSIDE", default=64, type=int,
+            help="NSIDE value for HEALpy Galaxy pixelization "),
+        Option("--Nth", default='150', type=int,
+            help="Bin count per pixel threshold for Galaxy pixelization"),
+        Option("--mth_cat", default=18.0, type=float,
+            help="Magnitude threshold for catalog to make it luminosity limited"),
+
+
+
+        Option("--zcut", default='None',type=str,
+            help="Apply maximum redshift cut to the universe"),
+        Option("--N", default=0,type=int,
+            help="Number of injections above the SNR threshold."),
+        Option("--population_model",default='powerlaw',type=str,
+            help="Population model to sample mass 1, mass 2 model is set to powerlaw."),
+        Option("--alpha",default=1,type=float,
+            help="Set the power for the mass 1 distribution, law x^-\alpha, with a MINUS (R&P convention)."),
+        Option("--beta",default=1,type=float,
+            help="Set the power for the mass 2 distribution, law x^\beta, with a PLUS (R&P convention)."),
+        Option("--Mmax",default=100,type=float,
+            help="Set the maximum mass for the mass 1 distribution."),
+        Option("--Mmin",default=5,type=float,
+            help="Set the manimum mass for the mass 1 distribution."),
+        Option("--alpha2",default=1,type=float,
+            help="Set the second power for the mass 1 distribution, law x^-\alpha2, with a MINUS (R&P convention) (used only if model=broken-powerlaw)"),
+        Option("--b",default=50,type=float,
+            help="Set the point of transition between alpha and alpha2, in solar-mass units (used only if model=broken-powerlaw)"),
+        Option("--mu",default=1,type=float,
+            help="Set the mu of the gaussian peak for the mass 1 distribution.(used only if model=powerlaw-gaussian)"),
+        Option("--sigma",default=1,type=float,
+            help="Set the sigma of the gaussian peak for the mass 1 distribution.(used only if model=powerlaw-gaussian)"),
+        Option("--Lambda",default=0.5,type=float,
+            help="Set the lambda of the gaussian peak."),
+        Option("--mu_low",default=1,type=float,
+            help="Set the mu of the gaussian peak for the mass 1 distribution.(used only if model=powerlaw-gaussian)"),
+        Option("--sigma_low",default=1,type=float,
+            help="Set the sigma of the gaussian peak for the mass 1 distribution.(used only if model=powerlaw-gaussian)"),
+        Option("--Lambda_low",default=0.5,type=float,
+            help="Set the lambda of the gaussian peak."),
+        Option("--delta_m",default=5,type=float,
+            help="Set the delta_m of the smoothing."),
+
+        Option("--psd", default=None, type=str,
+            help="Select between 'O1' and 'O2' and 'O3' PSDs, for default Pdet calculations. By default we use aLIGO at design sensitivity."),
+        Option("--snr", default='12.0', type=float,
+            help="Network SNR threshold.(used to claim or not detections)"),
+        Option("--snr_single", default='6.0', type=float,
+            help="Single detector SNR threshold.(used to find detectors with high snrs to be acouunted for PE)"),
+        Option("--detectors", default='HLV',
+            help="Set the detectors to use for the pickle (default=HLV)."),
+        Option("--det_combination", default=1, type=int,
+            help="Set whether or not to consider all possible detectors combinations (default=1=True)."),
+        Option("--output",default='injections_parameters',type=str,
+            help="Name of output file."),
+        Option("--n_pop", default=1000, type=int,
+            help="The number of points to use for the redshift function interpolation."),
+        Option("--days_of_O1", default=131, type=int,
+            help="Total days of O1 run."),
+        Option("--days_of_O2", default=268, type=int,
+            help="Total days of O2 run."),
+        Option("--days_of_O3", default=330, type=int,
+            help="Total days of O3 run."),
+        Option("--days_of_O4", default=330, type=int,
+            help="Total days of O4 run."),
+        Option("--duty_factor_O4_H1", default=0.75, type=float,
+            help="The duty factor of H1 for the O4 run."),
+        Option("--duty_factor_O4_L1", default=0.75, type=float,
+            help="The duty factor of L1 for the O4 run."),
+        Option("--duty_factor_O4_V1", default=0.75, type=float,
+            help="The duty factor of V1 for the O4 run."),
+        Option("--duty_factor_O3_H1", default=0.75, type=float,
+            help="The duty factor of H1 for the O3 run."),
+        Option("--duty_factor_O3_L1", default=0.75, type=float,
+            help="The duty factor of L1 for the O3 run."),
+        Option("--duty_factor_O3_V1", default=0.75, type=float,
+            help="The duty factor of V1 for the O3 run."),
+        Option("--duty_factor_O2_H1", default=0.6, type=float,
+            help="The duty factor of H1 for the O2 run."),
+        Option("--duty_factor_O2_L1", default=0.6, type=float,
+            help="The duty factor of L1 for the O2 run."),
+        Option("--duty_factor_O2_V1", default=-1, type=float,
+            help="The duty factor of V1 for the O2 run."),
+        Option("--duty_factor_O1_H1", default=0.6, type=float,
+            help="The duty factor of H1 for the O1 run."),
+        Option("--duty_factor_O1_L1", default=0.5, type=float,
+            help="The duty factor of L1 for the O1 run."),
+
+        Option("--Madau_alpha", default=3.0, type=float,
+            help="Set rate evolution parameter alpha for Madau model."),
+        Option("--Madau_beta", default=3.0, type=float,
+            help="Set Beta for Madau model."),
+        Option("--Madau_zp", default=0.0, type=float,
+            help="Set zp for Madau model."),
+        Option("--T_obs", default=0, type=float,
+            help="Set the observation time for the injections in years."),
+        Option("--R0", default=1., type=float,
+            help="Set merger rate in 1/Gpc^3/year"),
+        Option("--npools", default=4, type=int,
+            help="The number of pools."),
+        Option("--red_depend", default=0,type=int,
+            help="Default is 0 (false). If set to 1 (true) it will take into account a linear redshift dependance of mass parameters."),
+        
+        Option("--time_delay", default=0,type=int,
+            help="Default is 0 (false). If set to 1 (true) the code will take into account time delay of the BBH mergers."),
+        Option("--t_min", default=0.5, type=float,
+            help="The minimum value for the time delay in Gyrs."),
+        Option("--alpha_delay", default=1., type=float,
+            help="Set the alpha_delay parameter."),
+        Option("--gamma_delay", default=-1., type=float,
+            help="Set the gamma_delay parameter."),
+        Option("--d", default=1., type=float,
+            help="Set the power of the time delay distribution."),
+        Option("--Z_star", default=10**(-4), type=float,
+            help="The Z_star(metallicity) for the time delay model."),
+        Option("--zeta", default=-2, type=float,
+            help="The zeta parameter for the time delay model."),
+        Option("--z_f_max", default=30, type=float,
+            help="The maximum allowed redshift for the star formation."),
+        Option("--z_plus", default=20, type=float,
+            help="The upper limit to the integration for the time delay(z_upper=z_m+z_plus)."),
+
+        Option("--epsilon_alpha", default=0, type=float,
+            help="Set the linear redshifht dependance of alpha."),
+        Option("--epsilon_alpha2", default=0, type=float,
+            help="Set the linear redshifht dependance of alpha2."),
+        Option("--epsilon_beta", default=0, type=float,
+            help="Set the linear redshifht dependance of beta."),
+        Option("--epsilon_b", default=0, type=float,
+            help="Set the linear redshifht dependance of b."),
+        Option("--epsilon_Mmax", default=0, type=float,
+            help="Set the linear redshifht dependance of Mmax."),
+        Option("--epsilon_Mmin", default=0, type=float,
+            help="Set the linear redshifht dependance of Mmin."),
+        Option("--epsilon_mu", default=0, type=float,
+            help="Set the linear redshifht dependance of mu."),
+        Option("--epsilon_Lambda", default=0, type=float,
+            help="Set the linear redshifht dependance of lambda."),
+        Option("--epsilon_sigma", default=0, type=float,
+            help="Set the linear redshifht dependance of sigma."),
+        Option("--epsilon_mu_low", default=0, type=float,
+            help="Set the linear redshifht dependance of mu_low."),
+        Option("--epsilon_Lambda_low", default=0, type=float,
+            help="Set the linear redshifht dependance of lambda_low."),
+        Option("--epsilon_sigma_low", default=0, type=float,
+            help="Set the linear redshifht dependance of sigma_low."),
+        Option("--epsilon_delta_m", default=0, type=float,
+            help="Set the linear redshifht dependance of delta_m."),
+        
+        Option("--spin_model", default='None', type=str,
+            help="Set to heavy_mass, uniform, Gaussian, zGaussian, correlated."),
+        Option("--aligned_spins", default=1, type=int,
+            help="If set to 1 it will consider aligned spins (both thetas are 0 or both are pi). If set to 0, use random spin directions."),
+        Option("--sigma_0", default=None, type=float,
+            help="Set the value of sigma for chi_eff (in case of Gaussian model)."),
+        Option("--chi_0", default=None, type=float,
+            help="Set value of mean chi_eff (in case of Gaussian model)."),
+        Option("--mu_chi_0", default=None, type=float,
+            help="Set the chi_eff expectation value of the spin (in case of correlation model)."),
+        Option("--sigma_chi_0", default=None, type=float,
+            help="Set the chi_eff stdev value of the spin (in case of correlation model)."),
+        Option("--alpha_spin", default=None, type=float,
+            help="Set the linear coefficient of the correlation mu_chi and q (in case of correlation model)."),
+        Option("--beta_spin", default=None, type=float,
+            help="Set the linear coefficient of the correlation log(sigma) and q (in case of correlation model)."),
+        Option("--spin_z_mu", default=None, type=float,
+            help="Set the z=0 value of the chis expectation value (in case of z-evol spin model)."),
+        Option("--spin_z_epsilon_mu", default=None, type=float,
+            help="Set the linear coefficient of the expectation value for the chis (in case of z-evol spin model)."),
+        Option("--spin_z_sigma", default=None, type=float,
+               help="Set the z=0 value of the chis sigma value (in case of z-evol spin model)."),
+        Option("--spin_z_epsilon_sigma", default=None, type=float,
+            help="Set the linear coefficient of the sigma value for the chis (in case of z-evol spin model)."),
+        Option("--m_th", default=20, type=float,
+            help="Set value of mass for which below spins are 0 (in case of heavy mass model).")
+        
+        ])
+
+opts, args = parser.parse_args()
+
+np.random.seed(opts.seed)
+if opts.N==0 and opts.T_obs==0: raise ValueError("Please provide either a T_obs or a number of injections.")
+if opts.N!=0 and opts.T_obs!=0:
+    warnings.warn("Values for both T_obs and number of injections parameters were given, will produce injections being consistent with the merger rate and T_obs.",stacklevel=0)
+    opts.N=0
+if opts.T_obs!=0: opts.T_obs = float(opts.T_obs)
+
+
+missing = []
+for option in parser.option_list:
+    if 'required' in option.help and eval('opts.' + option.dest) == None: missing.extend(option._long_opts)
+if len(missing) > 0: parser.error('Missing required options: {0}'.format(str(missing)))
+
+red_evol_parameters = dict(R0 = opts.R0,
+                           T_obs = opts.T_obs,
+                           zp=opts.Madau_zp,
+                           madau_alpha=opts.Madau_alpha,
+                           madau_beta=opts.Madau_beta,
+                           weighting=opts.redshift_weight,
+                           model=opts.red_model,
+                           zcut=opts.zcut,
+                           alpha_delay=opts.alpha_delay,
+                           gamma_delay=opts.gamma_delay,
+                           t_min=opts.t_min,
+                           d=opts.d,
+                           z_plus=opts.z_plus,
+                           z_f_max=opts.z_f_max,
+                           Z_star=opts.Z_star,
+                           zeta=opts.zeta)
+
+if opts.time_delay == 1:
+    red_evol_parameters['madau_alpha'] = 2.7
+    red_evol_parameters['madau_beta'] = 2.9
+    red_evol_parameters['madau_zp'] = 1.9
+    red_evol_parameters['model'] = 'time_delay'
+    opts.red_depend = 1 # force the redshift dependence to 1
+
+#print(opts)
+print("\nCommand line options are:\n")
+for opt, value in opts.__dict__.items():
+    print(opt,value)
+
+
+cosmo = None
+if opts.use_cosmo == 1:
+    cosmo_dic = {'H0': opts.H0, 'w0':opts.w0, 'Omega_m':opts.Omega_m, 'cosmo_model': opts.cosmo_model}
+    cosmo = Cosmology(cosmo_dic)
+
+
+if opts.catalog_name:
+    galaxy_cat_parameters = dict(zmax = opts.zcut, zmin = opts.zmin, z_err_perc = opts.z_err_perc, magnitude_band = 'g', magnitude_type = 'apparent',
+                                 NSIDE = opts.NSIDE, Nth = opts.Nth, catalog_name = opts.catalog_name, mth_cat = opts.mth_cat)
+else:
+    galaxy_cat_parameters = None
+
+
+
+
+# check spin parameters for consistency
+# for the user-defined case with correlation, all 4 spin_correlation must be set
+isok = False
+if (opts.mu_chi_0 is None) and \
+   (opts.sigma_chi_0 is None) and \
+   (opts.alpha_spin is None) and \
+   (opts.beta_spin is None):
+   isok = True
+if not (opts.mu_chi_0 is None) and \
+   not (opts.sigma_chi_0 is None) and \
+   not (opts.alpha_spin is None) and \
+   not (opts.beta_spin is None):
+   isok = True
+if not isok:
+    raise ValueError("Please provide all four spin-correlation parameters.")
+
+# for the user-defined case with z-evolution of the spin value, all 4 parameters must be set
+isok = False
+if (opts.spin_z_mu is None) and \
+   (opts.spin_z_sigma is None) and \
+   (opts.spin_z_epsilon_mu is None) and \
+   (opts.spin_z_epsilon_sigma is None):
+   isok = True
+if not (opts.spin_z_mu is None) and \
+   not (opts.spin_z_sigma is None) and \
+   not (opts.spin_z_epsilon_mu is None) and \
+   not (opts.spin_z_epsilon_sigma is None):
+   isok = True
+if not isok:
+    raise ValueError("Please provide all four spin-z-evolution parameters.")
+
+
+if os.path.isfile(opts.output+'_galaxies.p'):
+    galaxies_parameters = pickle.load(open(opts.output+'_galaxies.p','rb'))
+else:
+    select_galaxies = Select_galaxies(opts.file,opts.luminosity_weight,opts.redshift_weight,opts.N,red_evol_parameters,cosmo,galaxy_cat_parameters)
+    galaxies_parameters = select_galaxies.select()
+    galaxies_parameters['lumi_weighting'] = opts.luminosity_weight
+    galaxies_parameters['cosmo'] = select_galaxies.cosmo
+    pickle.dump(galaxies_parameters, open( opts.output+"_galaxies.p", "wb" ) )
+
+pop_parameters = dict(lambda_peak=opts.Lambda,
+                      beta=opts.beta, # for a m2-law x^beta in the gwcosmo sampling code
+                      model=opts.population_model,
+                      alpha=opts.alpha, # for a m1-law x^-alpha in the gwcosmo sampling code
+                      alpha_2=opts.alpha2, # for a m1-law x^-alpha2 in the gwcosmo sampling code
+                      b=opts.b, # in solar mass units
+                      mmin=opts.Mmin,
+                      delta_m=opts.delta_m,
+                      mmax=opts.Mmax,
+                      mu_g=opts.mu,
+                      sigma_g=opts.sigma,
+                      N=int(len(galaxies_parameters['ras'])),
+                      n=opts.n_pop,
+                      mu_g_low=opts.mu_low,
+                      lambda_peak_low=opts.Lambda_low,
+                      sigma_g_low=opts.sigma_low,
+                      alpha_delay=opts.alpha_delay,
+                      gamma_delay=opts.gamma_delay,
+                      t_min=opts.t_min,
+                      d=opts.d,
+                      z_plus=opts.z_plus,
+                      z_f_max=opts.z_f_max,
+                      Z_star=opts.Z_star,
+                      zeta=opts.zeta,
+                      spin_model=opts.spin_model,
+                      aligned_spins=opts.aligned_spins,
+                      spin_correlation_mu_chi0 = opts.mu_chi_0,
+                      spin_correlation_sigma_chi0 = opts.sigma_chi_0,
+                      spin_correlation_alpha = opts.alpha_spin,
+                      spin_correlation_beta = opts.beta_spin,
+                      spin_zevol_mu = opts.spin_z_mu,
+                      spin_zevol_sigma = opts.spin_z_sigma,
+                      spin_zevol_epsilon_mu = opts.spin_z_epsilon_mu,
+                      spin_zevol_epsilon_sigma = opts.spin_z_epsilon_sigma,
+                      m_th = opts.m_th,
+                      chi_0 = opts.chi_0,
+                      sigma_0 = opts.sigma_0,
+                      epsilon_alpha=opts.epsilon_alpha,
+                      epsilon_alpha_2=opts.epsilon_alpha2,
+                      epsilon_beta=opts.epsilon_beta,
+                      epsilon_b=opts.epsilon_b,
+                      epsilon_Mmax=opts.epsilon_Mmax,
+                      epsilon_Mmin=opts.epsilon_Mmin,
+                      epsilon_mu=opts.epsilon_mu,
+                      epsilon_Lambda=opts.epsilon_Lambda,
+                      epsilon_sigma=opts.epsilon_sigma,
+                      epsilon_mu_low=opts.epsilon_mu_low,
+                      epsilon_sigma_low=opts.epsilon_sigma_low,
+                      epsilon_delta_m=opts.epsilon_delta_m,
+                      epsilon_Lambda_low=opts.epsilon_Lambda_low)
+
+print("\nPopulation dict values are:\n")
+for pop_opt, pop_value in pop_parameters.items():
+    print("---pop values:--- ",pop_opt,pop_value)
+
+
+if os.path.isfile(opts.output+'_masses.p'):
+    checkpoint = pickle.load(open(opts.output+'_masses.p','rb'))
+    pop_parameters['m1s'] = checkpoint['m1s']
+    pop_parameters['m2s'] = checkpoint['m2s']
+    pop_parameters['masses'] = checkpoint['masses'],
+    pop_parameters['m1s_eff'] = checkpoint['m1s_eff']
+    pop_parameters['m2s_eff'] = checkpoint['m2s_eff']
+else:
+    mass_distribution = Masses(pop_parameters,opts.time_delay,opts.red_depend)
+    mass_distribution.sample(galaxies_parameters['zs'],cosmo=galaxies_parameters['cosmo'],pools=opts.npools)
+    checkpoint = dict(m1s = pop_parameters['m1s'],
+                      m2s = pop_parameters['m2s'],
+                      masses = pop_parameters['masses'],
+                      m1s_eff = pop_parameters['m1s_eff'],
+                      m2s_eff = pop_parameters['m2s_eff'])
+    pickle.dump(checkpoint, open( opts.output+"_masses.p", "wb" ) )
+    
+wm1bad = np.where(np.isnan(pop_parameters['m1s'])| (pop_parameters['m1s']<=0))[0]
+wm2bad = np.where(np.isnan(pop_parameters['m2s'])| (pop_parameters['m1s']<=0))[0]
+print("m1s nan or <= 0:{}".format(len(wm1bad)))
+print("m2s nan or <= 0:{}".format(len(wm2bad)))
+
+if os.path.isfile(opts.output+'_spins.p'):
+    checkpoint = pickle.load(open(opts.output+'_spins.p','rb'))
+    pop_parameters['chi_1'], pop_parameters['theta_1'] = checkpoint['chi_1'], checkpoint['theta_1']
+    pop_parameters['chi_2'], pop_parameters['theta_2'] = checkpoint['chi_2'], checkpoint['theta_2']
+    if pop_parameters['spin_model'] == 'correlated':
+        pop_parameters['spin_correlation_mu_chi0'] = checkpoint['spin_correlation_mu_chi0']
+        pop_parameters['spin_correlation_sigma_chi0'] = checkpoint['spin_correlation_sigma_chi0']
+        pop_parameters['spin_correlation_alpha'] = checkpoint['spin_correlation_alpha']
+        pop_parameters['spin_correlation_beta'] = checkpoint['spin_correlation_beta']
+else:
+    spins_distribution = Spins(pop_parameters,galaxies_parameters['zs'])
+    spins_distribution.sample()
+    checkpoint = dict(chi_1=pop_parameters['chi_1'],theta_1=pop_parameters['theta_1'],
+                    chi_2=pop_parameters['chi_2'],theta_2=pop_parameters['theta_2'])
+    if pop_parameters['spin_model'] == 'correlated':
+        checkpoint['spin_correlation_mu_chi0'] = pop_parameters['spin_correlation_mu_chi0']
+        checkpoint['spin_correlation_sigma_chi0'] = pop_parameters['spin_correlation_sigma_chi0']
+        checkpoint['spin_correlation_alpha'] = pop_parameters['spin_correlation_alpha']
+        checkpoint['spin_correlation_beta'] = pop_parameters['spin_correlation_beta']
+
+    pickle.dump(checkpoint, open( opts.output+"_spins.p", "wb" ) )
+
+dets = []
+if 'H' in opts.detectors: dets.append('H1')
+if 'L' in opts.detectors: dets.append('L1')
+if 'V' in opts.detectors: dets.append('V1')
+
+days_of_runs = {'O1':opts.days_of_O1,'O2':opts.days_of_O2,'O3':opts.days_of_O3,'O4':opts.days_of_O4}   
+duty_factors = {'O4':{'H1':opts.duty_factor_O4_H1,'L1':opts.duty_factor_O4_L1,'V1':opts.duty_factor_O4_V1},
+                'O3':{'H1':opts.duty_factor_O3_H1,'L1':opts.duty_factor_O3_L1,'V1':opts.duty_factor_O3_V1},
+                'O2':{'H1':opts.duty_factor_O2_H1,'L1':opts.duty_factor_O2_L1,'V1':opts.duty_factor_O2_V1},
+                'O1':{'H1':opts.duty_factor_O1_H1,'L1':opts.duty_factor_O1_L1,'V1':-1}}
+#days of O1: 12/09/15 up to 20/01/16    days of O2:  02/12/16 up to 26/08/17 (break 09/05/17 to 09/06/17
+#days of O3: 02/04/19 up to 27/03/20 (break: 01/10/19 to 01/11/19)
+#total days=1659,  O1=131, O2=268 (break=30), O3=361 (break=30) total_days_of_runs=760
+#data taken from https://www.gw-openscience.org/timeline
+
+det_parameters = dict(snr_network=opts.snr,
+                      asd=opts.psd,
+                      detectors=dets,
+                      N=int(len(galaxies_parameters['ras'])),
+                      det_combination=opts.det_combination,
+                      T_obs=opts.T_obs,
+                      snr_single=opts.snr_single,
+                      days_of_runs=days_of_runs,
+                      duty_factors=duty_factors)
+select_events = Select_events(pop_parameters,galaxies_parameters,det_parameters,pools=opts.npools)
+t = time.time()
+select_events.select()
+print("Time needed to select events: {} seconds".format(time.time()-t))
+
+injections_parameters = dict(m1s=select_events.m1s[select_events.idx_single],m2s=select_events.m2s[select_events.idx_single])
+injections_parameters['m1d'] = select_events.m1d[select_events.idx_single]
+injections_parameters['m2d'] = select_events.m2d[select_events.idx_single]
+injections_parameters['chi_1'] = select_events.chi_1[select_events.idx_single]
+injections_parameters['chi_2'] = select_events.chi_2[select_events.idx_single]
+injections_parameters['theta_1'] = select_events.theta_1[select_events.idx_single]
+injections_parameters['theta_2'] = select_events.theta_2[select_events.idx_single]
+injections_parameters['ras'] = select_events.ras[select_events.idx_single]
+injections_parameters['decs'] = select_events.decs[select_events.idx_single]
+injections_parameters['dls'] = select_events.dls[select_events.idx_single]
+injections_parameters['incs'] = select_events.incs[select_events.idx_single]
+injections_parameters['phis'] = select_events.phis[select_events.idx_single]
+injections_parameters['psis'] = select_events.psis[select_events.idx_single]
+injections_parameters['zs'] = select_events.zs[select_events.idx_single]
+injections_parameters['snrs'] = select_events.snrs
+injections_parameters['snrs_single'] = select_events.snrs_single
+injections_parameters['dets'] = np.array(select_events.dets)[select_events.idx_single]
+injections_parameters['psds'] = np.array(select_events.psds)[select_events.idx_single]
+injections_parameters['dets_pe'] = select_events.dets_pe
+injections_parameters['durations'] = select_events.durations
+injections_parameters['geocent_time'] = select_events.geocent_time[select_events.idx_single]
+injections_parameters['galaxy_idx'] = np.array(select_events.idx_single)
+injections_parameters['seeds'] = select_events.seeds
+
+parameters = dict(injections_parameters=injections_parameters,
+                  pop_parameters=pop_parameters,
+                  det_parameters=det_parameters,
+                  galaxies_parameters=galaxies_parameters,
+                  red_evol_parameters=red_evol_parameters)
+
+pickle.dump(parameters , open( opts.output+".p", "wb" ) )
