@@ -1,0 +1,158 @@
+#!/usr/bin/env python3
+
+import os
+import numpy as np
+from optparse import Option, OptionParser, OptionGroup
+import pickle
+import GWUniverse
+from GWUniverse.injections.posteriors import Posteriors
+import htcondor
+from htcondor import dags
+from shutil import copyfile
+from tqdm import tqdm
+
+def str2bool(v):
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+dag=dags.DAG()
+
+parser = OptionParser(
+    description = __doc__,
+    usage = "%prog [options]",
+    option_list = [
+    Option("--file",type=str,
+        help="Path of the injections file(required)."),
+    Option("--seed", default=None,
+        help="Random seed."),
+    Option("--create_dag", default='True', type=str,
+        help="If set to true it will create a dag file for the injections."),
+    Option("--condor", default='True', type=str,
+        help="If set to true it will create a dag file for the injections."),
+    Option("--index", default=0, type=int,
+        help="The index of the event."),
+    Option("--output", default='Injections', type=str,
+        help="The name of the output folder."),
+    Option("--ram", default=3000, type=int,
+        help="RAM asked for each run (default=3 GB)"),
+    Option("--disk", default=5000, type=int,
+        help="Disk asked for each run (default=5 GB)"),
+    Option("--search_tag", default='ligo.dev.o4.cbc.hubble.gwcosmo', type=str,
+        help="Search tag for the runs -- used in LIGO clusters (default=ligo.dev.o4.cbc.hubble.gwcosmo)"),
+    Option("--full_pe",default='False',type=str,
+        help="If true creates bilby files for full PE(besides spins) of the injections. If false it will also fix psi and phase to the injected values (default=False)."),
+    Option("--waveform",default='IMRPhenomPv2',type=str,
+        help="Select the waveform approximant to use."),
+    Option("--npool",default=16,type=int,
+        help="The number of pools."),
+    Option("--sampling_frequency",default=4096,type=float,
+        help="Set the sampling frequency."),
+    Option("--dlogz",default=0.1,type=float,
+        help="Set the dlogz for the sampler."),
+    Option("--nlive",default=1024,type=int,
+        help="Set the sampler live points."),
+    Option("--distance_margi",default='False',type=str,
+        help="If true it will use distance marginalization for the PE."),
+    Option("--fake_posteriors",default='False',type=str,
+        help="If set to True it will create Gaussian posteriors around the true values of events' parameters."),
+    Option("--wide_priors",default='True',type=str,
+        help="If False the mass, distance priors for the PE will be selected accordingly to the the true values of events' parameters. If True the priors will be wide.")
+        ])
+
+
+opts, args = parser.parse_args()
+if opts.seed!=None and opts.seed!='None': np.random.seed(int(opts.seed))
+print(opts)
+missing = []
+for option in parser.option_list:
+    if 'required' in option.help and eval('opts.' + option.dest) == None: missing.extend(option._long_opts)
+if len(missing) > 0: parser.error('Missing required options: {0}'.format(str(missing)))
+
+full_pe = str2bool(opts.full_pe)
+condor = str2bool(opts.condor)
+create_dag = str2bool(opts.create_dag)
+
+ram = str(opts.ram)
+disk = str(opts.disk)
+search_tag = opts.search_tag
+path = os.path.abspath(os.path.dirname(__file__))
+pdet = pickle.load(open(opts.file,'rb'))
+injections_parameters = pdet['injections_parameters']
+posteriors = Posteriors(full_pe)
+fake_posteriors = str2bool(opts.fake_posteriors)
+wide_priors = str2bool(opts.wide_priors)
+
+if fake_posteriors:
+    condor = False
+    create_dag = False
+
+pe_arguments = dict(waveform=opts.waveform,nlive=opts.nlive,npool=opts.npool,
+                    sampling_frequency=opts.sampling_frequency,dlogz=opts.dlogz,wide_priors=wide_priors,
+                    distance_margi=str2bool(opts.distance_margi),fake_posteriors=fake_posteriors)
+if not os.path.isdir(opts.output) and create_dag: os.mkdir(opts.output)
+
+if not fake_posteriors and create_dag:
+    print("Creating dag file for condor at the folder {}".format(opts.output))
+    if not os.path.isdir(opts.output+'/log'): os.mkdir(opts.output+'/log')
+    indexes = np.arange(len(injections_parameters['m1s'])).tolist()
+    variables = []
+
+    if opts.file[0]!='/':copyfile(opts.file.split('/')[0], opts.output+'/'+opts.file.split('/')[0])
+    for i in indexes:
+        variables.append({'event_index':'{}'.format(i)})
+
+    args  = f"\
+        --condor True\
+        --create_dag False\
+        --file {opts.file}\
+        --seed {opts.seed}\
+        --output {opts.output}\
+        --waveform {opts.waveform}\
+        --sampling_frequency {opts.sampling_frequency}\
+        --full_pe {opts.full_pe}\
+        --nlive {opts.nlive}\
+        --dlogz {opts.dlogz}\
+        --distance_margi {opts.distance_margi}\
+        --fake_posteriors {opts.fake_posteriors}\
+        --wide_priors {opts.wide_priors}\
+        --npool {opts.npool}\
+        "
+
+    posteriors_dag = htcondor.Submit(
+        Executable = path+'/GW_create_posteriors',
+        Universe   = 'vanilla',
+        arguments  = args + " --index $(event_index)",
+        output     = 'log/output_event_$(event_index).out',
+        error      = 'log/output_event_$(event_index).err',
+        Log        = 'log/output_event_$(event_index).log',
+        getenv     = 'True',
+        request_cpus = opts.npool,
+        request_disk = disk,
+        accounting_group = search_tag,
+        accounting_group_user = os.environ['USER'],
+        request_memory = ram,)
+
+    single_pixel_layer = dag.layer(
+    name = 'event',
+    submit_description = posteriors_dag,
+    vars = variables,)
+
+    dags.write_dag(dag,opts.output)
+else:
+    
+    if not condor:
+        if not os.path.isdir(opts.output): os.mkdir(opts.output)
+        if not os.path.isdir(opts.output+'/Events'): os.mkdir(opts.output+'/Events')
+        for i in tqdm(range(len(injections_parameters['m1s']))):
+            folder = opts.output+'/Events/event_'+str(i)
+            if not os.path.isdir(folder): os.mkdir(folder)
+            posteriors.event_with_idx(injections_parameters,folder,i,pe_arguments)
+    else:
+        if not os.path.isdir('Events'): os.mkdir('Events')
+        folder = 'Events/event_'+str(opts.index)
+        if not os.path.isdir(folder): os.mkdir(folder)
+        posteriors.event_with_idx(injections_parameters,folder,opts.index,pe_arguments)

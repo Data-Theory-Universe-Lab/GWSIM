@@ -1,0 +1,168 @@
+#!/usr/bin/env python3
+
+import pickle
+import numpy as np
+from optparse import Option, OptionParser, OptionGroup
+import h5py
+import pickle
+import healpy as hp
+from GWUniverse.catalog.create_catalog import Catalog
+from GWUniverse.catalog.create_catalog_mth import *
+from GWUniverse.universe.create_universe import Universe
+from GWUniverse.cosmology import Cosmology
+
+def str2bool(v):
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+parser = OptionParser(
+    description = __doc__,
+    usage = "%prog [options]",
+    option_list = [
+        Option("--universe",default=None,type=str,
+            help="The path of the Universe file. (required)"),
+        Option("--mth",default=22.,type=float,
+            help="The apparent magnitude threshold to use for the galaxy catalog."),
+        Option("--catalog_skymap",default='False',type=str,
+            help="Path to a skymap of a galaxy catalog in .p format, contains a Healpix array."),
+        Option("--catalog_mask_skymap",default='False',type=str,
+            help="Path to a skymap of the mask of the same galaxy catalog in .p format, contains a Healpix array."),
+        Option("--catalog",default='False',type=str,               
+            help="Path to a hdf5 file containing the full galaxy catalog (expected fields: ra, dec, z)."),
+        Option("--z_min",default=0,type=float,
+            help="min value of the redshift for galaxy selection in the catalog (to be used with flag --catalog)."),
+        Option("--z_max",default=10,type=float,
+            help="max value of the redshift for galaxy selection in the catalog (to be used with flag --catalog). Default value set to the z_max of the object Universe."),
+        Option("--m_min",default=15,type=float,
+            help="min value of the app mag."),
+        Option("--m_max",default=25,type=float,
+            help="max value of the app mag."),
+        Option("--red_error",default='False',type=str,
+            help="If set to True the resdhifts in the galaxy catalog will be drawn from a normal distribution around the true value (default=False)."),
+        Option("--red_survey",default='specz',type=str,
+            help="Used only if red_error is True. Select between specz or photoz. The sigmas of the normal distributions for the redshifts errors will be set accordingly."),
+        Option("--output", default='Catalog', type=str,
+            help="The name of the output file."),
+        Option("--seed", default=0, type=int,
+            help="Seed value for fake skymap generation."),
+        Option("--lbin", default=20, type=int,
+            help="Binning step for multipoles."),
+    ])
+
+opts, args = parser.parse_args()
+
+missing = []
+for option in parser.option_list:
+    if 'required' in option.help and eval('opts.' + option.dest) == None: missing.extend(option._long_opts)
+if len(missing) > 0: parser.error('Missing required options: {0}'.format(str(missing)))
+
+red_error = str2bool(opts.red_error)
+opts.red_error = red_error # overwrite
+
+print("Loading universe...")
+
+if opts.universe[-2:]=='.p':
+    universe = pickle.load(open(opts.universe,'rb'))
+else:
+    raise ValueError("Format of the universe file not yet impelemented")
+
+opts.z_max = universe.redshift_parameters['maximum']
+
+if opts.catalog_skymap == 'False' and opts.catalog_mask_skymap == 'False' and opts.catalog == 'False':
+
+    # uniform mth over the full sky
+    catalog = Catalog(universe,opts.mth,opts.red_error,opts.red_survey)
+    catalog.create()
+    pdet = dict(cosmo_model=universe.cosmology.cosmo,H0 = universe.cosmology.H0,Omega_m = universe.cosmology.Omega_m,w0 = universe.cosmology.w0)
+    pickle.dump(pdet , open(opts.output+"_cosmo_parameters.p", "wb" ) )
+    with h5py.File("Catalog.hdf5", "w") as f:
+        f.create_dataset("ra", data=catalog.ra)
+        f.create_dataset("dec", data=catalog.dec)
+        f.create_dataset("z", data=catalog.z)
+        f.create_dataset("m_"+universe.LF_parameters['band'], data=catalog.app_magn)
+        f.create_dataset("abs_magn", data=catalog.abs_magn)
+        f.create_dataset("sigmaz", data=catalog.sigmaz)
+        f.create_dataset("z_real", data=catalog.z_real)
+
+else:
+    
+    # case --catalog exludes the case --catalog_skymap
+    if opts.catalog_mask_skymap != 'False' and opts.catalog != 'False':
+        parser.print_help()
+        raise ValueError("Flags --catalog_mask_skymap and --catalog are exclusive.")
+    
+    if opts.catalog_mask_skymap[-2:]=='.p':
+        catalog_mask_skymap = pickle.load(open(opts.catalog_mask_skymap,'rb'))
+    else:
+        raise ValueError("Format of the galaxy catalog mask skymap file not yet implemented")
+    
+    eff_skymap = 0*catalog_mask_skymap
+    zcut = 0
+    
+    if opts.catalog_skymap != 'False': # case with skymap and mask
+        print("Loading galaxy catalog skymap...")
+        if opts.catalog_skymap[-2:]=='.p':
+	        eff_skymap = pickle.load(open(opts.catalog_skymap,'rb'))
+        else:
+	        raise ValueError("Format of the galaxy catalog skymap file not yet implemented")
+
+        if len(eff_skymap) != len(catalog_mask_skymap):
+            raise ValueError("The skymaps for the galaxy catalog and its mask should have the same size.")
+        
+    else: # case with full hdf5 catalog, mask, z_min, z_max
+        zcut = 1
+        print("Reading full galaxy catalog file {}".format(opts.catalog))
+        data = h5py.File(opts.catalog,'r')
+        ntot = len(data['ra'])
+        print("Got {} entries in catalog".format(ntot))
+        # the variable data is the galaxy catalog, ie object of a hdf5 file which contains at least the keys: 'ra' (radians), 'dec' (radians), 'z'
+        # mask is the mask to use for the input catalog and the output mth map
+        nside = hp.npix2nside(len(catalog_mask_skymap))
+        zs = np.where( (np.array(data['z']) > opts.z_min) & (np.array(data['z'])<opts.z_max) )[0]
+        nsel = len(zs)
+        if nsel == 0:
+            raise ValueError("No galaxies in catalog in redshift bins {}-{}".format(opts.z_min,opts.z_max))
+        print("{} galaxies selected in redshift bin [{};{}] ({} %)...".format(nsel,opts.z_min,opts.z_max,(100.*nsel)/ntot))
+        decs = np.array(data['dec'])
+        theta = np.pi/2-decs[zs]
+        ras = np.array(data['ra'])
+        phi = ras[zs]
+        ipix = hp.ang2pix(nside,theta,phi)
+        print("Building skymap...")
+        eff_skymap = build_skymap(ipix,nside)
+
+    catalog = GalaxyCatalog(universe,eff_skymap,catalog_mask_skymap,opts)
+    catalog.create()
+
+    pdet = dict(cosmo_model=universe.cosmology.cosmo,H0 = universe.cosmology.H0,Omega_m = universe.cosmology.Omega_m,w0 = universe.cosmology.w0)
+    pickle.dump(pdet,open(opts.output+"_cosmo_parameters.p", "wb" ) )
+    with h5py.File(opts.output+".hdf5","w") as f:
+        f.create_dataset("input_catalog", data=catalog.catalog_skymap)
+        f.create_dataset("input_catalog_mask", data=catalog.catalog_mask_skymap)
+        f.create_dataset("apodized_mask", data=catalog.apod_mask)
+        f.create_dataset("final_map", data=catalog.final_map)
+        f.create_dataset("cl_input_map", data=catalog.cl_input_map)
+        f.create_dataset("cl_final_map", data=catalog.cl_final_map)
+        f.create_dataset("cvplus", data=catalog.cvplus)
+        f.create_dataset("cvminus", data=catalog.cvminus)
+        f.create_dataset("sim_catalog_skymap", data=catalog.mycatalog)
+        f.create_dataset("selected_galaxies_list", data=catalog.list_gal)
+        f.create_dataset("cl_binning", data=catalog.binning.lbin)
+        f.create_dataset("mycatalog", data=catalog.mycatalog)
+        f.create_dataset("seed", data=catalog.seed)
+        f.create_dataset("ra", data=catalog.ra)
+        f.create_dataset("dec", data=catalog.dec)
+        f.create_dataset("z", data=catalog.z)
+        f.create_dataset("m_"+universe.LF_parameters['band'], data=catalog.app_magn)
+        f.create_dataset("abs_magn", data=catalog.abs_magn)
+        f.create_dataset("sigmaz", data=catalog.sigmaz)
+        f.create_dataset("z_real", data=catalog.z_real)
+        if zcut:
+            f.create_dataset("z_min", data=opts.z_min)
+            f.create_dataset("z_max", data=opts.z_max)
+        f.create_dataset("m_min", data=opts.m_min)
+        f.create_dataset("m_max", data=opts.m_max)

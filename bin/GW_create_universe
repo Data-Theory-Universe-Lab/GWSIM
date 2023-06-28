@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+
+import os
+import numpy as np
+from optparse import Option, OptionParser, OptionGroup
+from scipy.interpolate import interp1d
+import h5py
+import pickle
+import lal
+from GWUniverse.universe.create_universe import Universe
+from GWUniverse.cosmology import Cosmology
+from GWUniverse.utils import Interpolate_function,Integrate_1d
+
+parser = OptionParser(
+    description = __doc__,
+    usage = "%prog [options]",
+    option_list = [
+        Option("--zmax", default=5.,type=float,
+            help="Maximum value of redshift."),
+        Option("--zmin", default=0.,type=float,
+            help="Minimum value of redshift."),
+        Option("--redshift_model", default='Uniform_comoving_volume',type=str,
+            help="Select the distribution for the redshifts of galaxies.(Uniform_comoving_volume or Uniform_comoving_time_volume)"),
+        Option("--N", default='None',type=str,
+            help="Number of galaxies in the universe."),
+        Option("--log_n", default='None',type=str,
+            help="Logarithm of the galaxy density (log10(n)). The number density will be caclualted in Mpc^-3."),
+        Option("--H0", default=70.,type=float,
+            help="Value of the Hubble constant."),
+        Option("--Omega_m", default=.3,type=float,
+            help="Value of the energy density of matter."),
+        Option("--cosmo_model",default='flatLCDM',type=str,
+            help="Select the cosmological model (flatLCDM or w0flatLCDM)"),
+        Option("--w0", default=-1,type=float,
+            help="Value of w0 of dark energy."),
+        Option("--seed", default=1000, type=int,
+            help="Random seed"),
+        Option("--band",default='K',type=str,
+            help="The luminosity band."),
+        Option("--schech_alpha", default=-1.09,type=float,
+            help="Value for slope of schechter function."),
+        Option("--schech_Mstar", default=-23.39,type=float,
+            help="Value for Mstar of schechter function, reference H0=100 km/s/Mpc"),
+        Option("--schech_Mmin", default=-27.0,type=float,
+            help="Value for Mmin of schechter function, reference H0=100 km/s/Mpc"),
+        Option("--schech_Mmax", default=-19.0,type=float,
+            help="Value for Mmax of schechter function, reference H0=100 km/s/Mpc"),
+        Option("--schech_phistar", default=1.0,type=float,
+            help="Value for phistar of schechter function."),
+        Option("--float_precision", default='np.float64', type=str,
+            help="The number precision to be used."),
+        Option("--n_redshift", default=20000, type=int,
+            help="The number of points to use for the redshift function interpolation."),
+        Option("--n_schech", default=2000, type=int,
+            help="The number of points to use for the Schechter function interpolation."),
+        Option("--sampling_method", default='inverse_cdf', type=str,
+            help="The type of sampling method to be used(rejection or inverse_cdf)."),
+        Option("--output", default='Universe', type=str,
+            help="The name of the output file.")
+        ])
+
+c = lal.C_SI/1000. #in km/s
+opts, args = parser.parse_args()
+np.random.seed(opts.seed)
+print(opts)
+precision = opts.float_precision
+if precision=='np.float16':
+    precision = np.float16
+elif precision=='np.float32':
+    precision = np.float32
+elif precision=='np.float64':
+    precision = np.float64
+else:
+    raise ValueError(f"Unknown --float_precision {opts.float_precision}. Valid options are np.float16, np.float32, np.float64")
+
+if opts.N=='None' and opts.log_n=='None': raise ValueError("Please provide either a number density or a number of galaxies.")
+if opts.N!='None' and opts.log_n!='None': warnings.warn("Values for both number density and number of galaxies were given, will produce universe being consistent with the number density value.",stacklevel=0)
+if opts.N!='None': opts.N = int(opts.N)
+
+if opts.sampling_method!='rejection' and opts.sampling_method!='inverse_cdf': 
+    warnings.warn("Sampling method not understood. Proceeding with inverse_cdf.",stacklevel=0)
+    opts.sampling_method='inverse_cdf'
+    
+cosmo_parameters = dict(H0=opts.H0,Omega_m=opts.Omega_m,w0=opts.w0,cosmo_model=opts.cosmo_model)
+cosmo = Cosmology(cosmo_parameters,opts.zmax)
+if opts.log_n!='None': 
+    opts.log_n = float(opts.log_n)
+    z = np.linspace(opts.zmin,opts.zmax,1000)
+    if opts.redshift_model=='Uniform_comoving_volume':
+        volume = cosmo.volume_z(z)*1e9 # volume must be in Mpc^3 as volume_z is in Gpc^3 and log_n is a density in Mpc^-3
+    else:
+        raise ValueError("Unknown redshift model.")
+    
+    parameters = dict(minimum=opts.zmin,maximum=opts.zmax)
+    parameters['distribution'] = volume
+    interpolation = Interpolate_function(parameters)
+    opts.N = int(np.power(10,opts.log_n)*Integrate_1d(opts.zmin,opts.zmax,1000, interpolation))
+    
+redshift_parameters = dict(maximum=opts.zmax,minimum=opts.zmin,N=opts.N,redshift_model=opts.redshift_model,n=opts.n_redshift)
+LF_parameters = dict(band=opts.band,maximum=opts.schech_Mmax,minimum=opts.schech_Mmin,alpha=opts.schech_alpha,Mstar_obs=opts.schech_Mstar,phistar=opts.schech_phistar,N=opts.N,n=opts.n_schech)
+    
+universe = Universe(redshift_parameters,cosmo,LF_parameters,precision,cosmo_parameters,opts.sampling_method)
+universe.create()
+
+print("Writing Universe file...")
+pickle.dump(universe , open( opts.output+".p", "wb" ) )
