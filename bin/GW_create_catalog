@@ -6,10 +6,10 @@ from optparse import Option, OptionParser, OptionGroup
 import h5py
 import pickle
 import healpy as hp
-from GWUniverse.catalog.create_catalog import Catalog
-from GWUniverse.catalog.create_catalog_mth import *
-from GWUniverse.universe.create_universe import Universe
-from GWUniverse.cosmology import Cosmology
+from GWSim.catalog.create_catalog import Catalog
+from GWSim.catalog.create_catalog_mth import *
+from GWSim.universe.create_universe import Universe
+from GWSim.cosmology import Cosmology
 
 def str2bool(v):
     if v.lower() in ('yes', 'true', 't', 'y', '1'):

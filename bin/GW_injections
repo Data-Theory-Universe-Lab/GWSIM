@@ -4,10 +4,10 @@ import os
 import numpy as np
 from optparse import Option, OptionParser, OptionGroup
 import pickle
-from GWUniverse.injections.masses import Masses
-from GWUniverse.injections.spins import Spins
-from GWUniverse.injections.make_injections import Select_events,Select_galaxies
-from GWUniverse.cosmology import Cosmology
+from GWSim.injections.masses import Masses
+from GWSim.injections.spins import Spins
+from GWSim.injections.make_injections import Select_events,Select_galaxies
+from GWSim.cosmology import Cosmology
 import warnings
 import time
 

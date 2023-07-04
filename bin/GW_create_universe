@@ -7,9 +7,9 @@ from scipy.interpolate import interp1d
 import h5py
 import pickle
 import lal
-from GWUniverse.universe.create_universe import Universe
-from GWUniverse.cosmology import Cosmology
-from GWUniverse.utils import Interpolate_function,Integrate_1d
+from GWSim.universe.create_universe import Universe
+from GWSim.cosmology import Cosmology
+from GWSim.utils import Interpolate_function,Integrate_1d
 
 parser = OptionParser(
     description = __doc__,

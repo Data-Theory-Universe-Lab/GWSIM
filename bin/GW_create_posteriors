@@ -4,8 +4,8 @@ import os
 import numpy as np
 from optparse import Option, OptionParser, OptionGroup
 import pickle
-import GWUniverse
-from GWUniverse.injections.posteriors import Posteriors
+import GWSim
+from GWSim.injections.posteriors import Posteriors
 import htcondor
 from htcondor import dags
 from shutil import copyfile
