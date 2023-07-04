@@ -24,7 +24,7 @@ parser = OptionParser(
         Option("--N", default='None',type=str,
             help="Number of galaxies in the universe."),
         Option("--log_n", default='None',type=str,
-            help="Logarithm of the galaxy density (log10(n)). The number density will be caclualted in Mpc^-3."),
+            help="Logarithm of the galaxy density (log10(n)). The number density will be calculated in Mpc^-3."),
         Option("--H0", default=70.,type=float,
             help="Value of the Hubble constant."),
         Option("--Omega_m", default=.3,type=float,

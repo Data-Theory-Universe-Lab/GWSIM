@@ -91,7 +91,7 @@ parser = OptionParser(
             help="Set the delta_m of the smoothing."),
 
         Option("--psd", default=None, type=str,
-            help="Select between 'O1' and 'O2' and 'O3' PSDs, for default Pdet calculations. By default we use aLIGO at design sensitivity."),
+            help="Select between 'O1', 'O2', 'O3' and 'O4' power spectral densities (PSDs), for realistic noise. By default we use aLIGO at design sensitivity."),
         Option("--snr", default='12.0', type=float,
             help="Network SNR threshold.(used to claim or not detections)"),
         Option("--snr_single", default='6.0', type=float,
@@ -144,7 +144,7 @@ parser = OptionParser(
         Option("--T_obs", default=0, type=float,
             help="Set the observation time for the injections in years."),
         Option("--R0", default=1., type=float,
-            help="Set merger rate in 1/Gpc^3/year"),
+            help="Set merger rate in 1/Gpc^3/year at z=0"),
         Option("--npools", default=4, type=int,
             help="The number of pools."),
         Option("--red_depend", default=0,type=int,

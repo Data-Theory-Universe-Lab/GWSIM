@@ -61,6 +61,8 @@ class Select_galaxies(object):
             if file_path[-2:]=='.p':
                 data = pickle.load(open(file_path,'rb'))
                 if self.cosmo is None:
+                    # we consider the cosmological model of the fake universe
+                    # else we use the cosmology object of the __init__ function
                     self.cosmo = data.cosmology
                 self.ra = np.array(data.ra)
                 self.dec = np.array(data.dec)
