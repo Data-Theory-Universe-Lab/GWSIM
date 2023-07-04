@@ -26,7 +26,7 @@ parser = OptionParser(
     usage = "%prog [options]",
     option_list = [
     Option("--file",type=str,
-        help="Path of the injections file(required)."),
+        help="Path of the injections file (required)."),
     Option("--seed", default=None,
         help="Random seed."),
     Option("--create_dag", default='True', type=str,
