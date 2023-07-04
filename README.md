@@ -25,3 +25,6 @@ GWSim is a python code that allows to generate fake gravitational waves (GW) eve
     python -m pip install .
     ```
 
+```
+./bin/GW_create_universe --log_n -5
+```
