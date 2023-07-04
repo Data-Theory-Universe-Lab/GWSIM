@@ -6,7 +6,7 @@ from astropy import units as u
 import multiprocess as mp
 import os
 import time
-import GWUniverse.random.custom_math_priors as cmp
+import GWSim.random.custom_math_priors as cmp
 
 
 class Time_delay(object):

@@ -7,11 +7,11 @@ from scipy.interpolate import interp1d
 from scipy.stats import ncx2
 from scipy.integrate import quad
 import pkg_resources
-from GWUniverse.catalog.real_catalog import RealCatalog
-from GWUniverse.universe.create_universe import Universe
-from GWUniverse.cosmology import Cosmology
-from GWUniverse.injections.distributions import Redshift
-from GWUniverse.utils import Interpolate_function,Integrate_1d
+from GWSim.catalog.real_catalog import RealCatalog
+from GWSim.universe.create_universe import Universe
+from GWSim.cosmology import Cosmology
+from GWSim.injections.distributions import Redshift
+from GWSim.utils import Interpolate_function,Integrate_1d
 import bilby as bl
 import logging
 import multiprocess as mp
@@ -408,7 +408,7 @@ class Select_events(object):
                 d.append('V1')
             self.dets.append(d)
 
-        self.data_path = pkg_resources.resource_filename('GWUniverse', 'data/')
+        self.data_path = pkg_resources.resource_filename('GWSim', 'data/')
         
         self.do_injections = self.do_injection_bilby
         for run in self.asds:

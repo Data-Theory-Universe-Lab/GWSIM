@@ -6,7 +6,6 @@ import numpy as np
 import lal
 import scipy.integrate as integrate
 from scipy import interpolate
-#from GWUniverse.utils import Integrate
 
 c = lal.C_SI/1000. #in km/s
 

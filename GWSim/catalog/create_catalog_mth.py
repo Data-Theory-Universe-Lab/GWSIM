@@ -1,4 +1,4 @@
-from GWUniverse.utils import Interpolate_function,Integrate_1d
+from GWSim.utils import Interpolate_function,Integrate_1d
 import xpol
 import pickle
 import h5py

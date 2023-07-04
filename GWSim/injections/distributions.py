@@ -1,5 +1,5 @@
 import numpy as np
-from GWUniverse.utils import Interpolate_function, Integrate_1d
+from GWSim.utils import Interpolate_function, Integrate_1d
 from scipy.interpolate import interp1d
 from scipy.integrate import simps
 from scipy.special import erf
@@ -8,9 +8,9 @@ from astropy import units as u
 import multiprocess as mp
 import os
 import time
-import GWUniverse.random.custom_math_priors as cmp
+import GWSim.random.custom_math_priors as cmp
 import copy
-from GWUniverse.random.priors import mass_prior
+from GWSim.random.priors import mass_prior
 
 def CheckEvolutionParams(zdict):
 

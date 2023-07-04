@@ -2,10 +2,10 @@ import os
 import numpy as np
 from optparse import Option, OptionParser, OptionGroup
 from scipy.interpolate import interp1d
-from GWUniverse.utils import Rejection_Sampling, Interpolate_function
-from GWUniverse.injections.distributions import Mass_redshift
-from GWUniverse.injections.time_delay import Time_delay
-from GWUniverse.random.priors import mass_prior
+from GWSim.utils import Rejection_Sampling, Interpolate_function
+from GWSim.injections.distributions import Mass_redshift
+from GWSim.injections.time_delay import Time_delay
+from GWSim.random.priors import mass_prior
 import copy
 from scipy import integrate
 
@@ -29,7 +29,7 @@ class Masses(object):
 
         self.hyper_params_dict = copy.deepcopy(self.pop_parameters) # same keys for the dictionaries
         # check 'b' field for gwcosmo
-        # gwuniverse asks b in solar masses, gwcosmo wants fraction of interval
+        # gwsim asks b in solar masses, gwcosmo wants fraction of interval
         # but do not modify the pop_parameters b value!
         self.hyper_params_dict['b'] = (pop_parameters['b']-pop_parameters['mmin'])/(pop_parameters['mmax']-pop_parameters['mmin'])
 

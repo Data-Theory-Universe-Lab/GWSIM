@@ -51,7 +51,7 @@ class Posteriors(object):
             psd = event_parameters['psd']
             det = event_parameters['det'].tolist()
 
-            data_path = pkg_resources.resource_filename('GWUniverse', 'data/')
+            data_path = pkg_resources.resource_filename('GWSim', 'data/')
             injection_parameters = dict(a_1=event_parameters['chi_1'],
                                         a_2=event_parameters['chi_2'],
                                         tilt_1=event_parameters['theta_1'],

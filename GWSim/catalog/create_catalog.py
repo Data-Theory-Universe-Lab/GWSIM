@@ -1,5 +1,5 @@
 import numpy as np
-from GWUniverse.utils import Interpolate_function,Integrate_1d
+from GWSim.utils import Interpolate_function,Integrate_1d
 
 class Catalog(object):
     def __init__(self,Universe,mth,red_error,red_survey):

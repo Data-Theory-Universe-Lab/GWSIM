@@ -1,5 +1,5 @@
 import numpy as np
-from GWUniverse.injections.distributions import Spin
+from GWSim.injections.distributions import Spin
 
 class Spins(object):
 

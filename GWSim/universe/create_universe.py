@@ -2,8 +2,8 @@ import os
 import numpy as np
 from optparse import Option, OptionParser, OptionGroup
 from scipy.interpolate import interp1d
-from GWUniverse.utils import Rejection_Sampling, Inverse_Cumulative_Sampling, Interpolate_function
-from GWUniverse.universe.distributions import Redshift,SchechterMagFunction
+from GWSim.utils import Rejection_Sampling, Inverse_Cumulative_Sampling, Interpolate_function
+from GWSim.universe.distributions import Redshift,SchechterMagFunction
 
 class Universe(object):
     def __init__(self,redshift_parameters,cosmo,LF_parameters,precision,cosmo_parameters,sampling_method):
