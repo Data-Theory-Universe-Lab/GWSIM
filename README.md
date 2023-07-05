@@ -67,9 +67,11 @@ Then you have to pick up some galaxies, chosen to be mergers hosts. The GW event
 ```
 *CAREFUL*: for a value `--alpha x` provided in the commandline, it corresponds to a powerlaw with spectral index `-x`!
 
+Note that you can set a new cosmology for the creation of mergers unsing a fake universe having a different cosmology. For this, you must set your cosmology with `--H0...` etc and tell the code to use the user-defined cosmology with the flag `--use_cosmo 1`. If this flag is not activated, the code will use the cosmological model of the fake universe `Universe.p`.
+
 The details of the command line arguments can always be obtained with the flag `--help`.
 
-After some time, we obtain that there have been 140418 mergers in the universe (between z=0 and z=5) and during the observation time specified. This number can vary as we use a poissonian law to draw it. Then the SNR is computed for all mergers, with a random choice among the interferometers (LIGO/Virgo), according to their duty cycles and according to the user's choice. After this step, you obtain some files:
+After some time, we obtain that there have been 140418 mergers in the universe (between z=0 and z=5 in this example) and during the observation time specified. This number can vary as we use a poissonian law to draw it. Then the SNR is computed for all mergers, with a random choice among the interferometers (LIGO/Virgo), according to their duty cycles and according to the user's choice. After this step, you obtain some files:
 
 ```
 my_GW_injections_galaxies.p
@@ -94,4 +96,13 @@ This is a quite long process. We usually have to use a cluster and the computati
 ./bin/GW_create_posteriors --file my_GW_injections.p --npools 20 --output fake_GW_events
 ```
 
-The final product is in the `hdf5` files, where the estimated parameters of the GW sources can be used for many analyses: population studies, cosmology...
+The final product is in the `hdf5` files, where the estimated parameters of the GW sources can be used for many analyses: population studies, cosmology... The `hdf5` file contains the posterior MCMC samples provided by Bilby, when reconstructing the events:
+```
+luminosity distance,
+right ascension,
+declination,
+m1,
+m2,0
+theta_jn
+```
+The same posterior data are also available in file `label_result.json`.
