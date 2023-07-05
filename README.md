@@ -39,7 +39,7 @@ All formulas used in the code are described in the [paper](<https://arxiv.org/ab
 
 ## Creation of a fake universe
 
-Create a fake universe, uniform in comobile volume, $\Lambda\text{CDM}$ model, with density of galaxies of $10^{-5}~\mathrm{Mpc}^{-3}$, between redshifts $0$ and $5$, with a Hubble constant of $H_0=80~\mathrm{km s}^{-1}\mathrm{Mpc}^{-1}$. The parameters of the Schechter function can be also modified and the default values correspond to $H_0=100~\mathrm{km s}^{-1}\mathrm{Mpc}^{-1}$.
+Create a fake universe, uniform in comobile volume, $\Lambda\text{CDM}$ model, with density of galaxies of $10^{-5}\text{ Mpc}^{-3}$, between redshifts $0$ and $5$, with a Hubble constant of $H_0=80 \text{ km s}^{-1}\text{Mpc}^{-1}$. The parameters of the Schechter function can be also modified and the default values correspond to $H_0=100 \text{ km s}^{-1}\text{Mpc}^{-1}$.
 
 ```
 ./bin/GW_create_universe --zmin 0 --zmax 5 --H0 80 --w0 -1 --log_n -5
