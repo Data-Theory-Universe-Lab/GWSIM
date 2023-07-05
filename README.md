@@ -2,7 +2,7 @@
 
 July 2023.
 
-GWSim is a python code that allows to generate fake gravitational waves (GW) events corresponding to binary black holes (BBHs) systems. First you have to either create a universe or use a galaxy catalog. Some galaxies will be chosen to host GW events, following the merger rate and population model you are using. The universe created by the code is uniform in comobile volume. If you have suggestions or find bugs please contact us: <revenu@in2p3.fr>.
+GWSim is a python code that allows to generate mock gravitational waves (GW) events corresponding to different binary black holes (BBHs) population models. First you have to either create a universe or use a galaxy catalog. Some galaxies will be chosen to host GW events, following the merger rate and population model you are using. The universe created by the code is uniform in comobile volume. If you have suggestions or find bugs please contact us: <revenu@in2p3.fr>.
 
 All formulas used in the code are described in the [paper](<https://arxiv.org/abs/2210.05724>), accepted for publication in Astronomy \& Astrophysics.
 
